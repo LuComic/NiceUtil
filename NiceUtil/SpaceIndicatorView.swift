@@ -5,7 +5,7 @@ struct SpaceIndicatorView: View {
     let totalSpaces: Int
     
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 10) { // Increased spacing from 6 to 14
             ForEach(1...totalSpaces, id: \.self) { i in
                 Text("\(i)")
                     .font(.system(size: 12))

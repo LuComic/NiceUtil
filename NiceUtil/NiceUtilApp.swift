@@ -1,17 +1,396 @@
-//
-//  NiceUtilApp.swift
-//  NiceUtil
-//
-//  Created by Lukas Jääger on 21.07.2025.
-//
-
 import SwiftUI
+import Cocoa
 
 @main
 struct NiceUtilApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+
     var body: some Scene {
-        WindowGroup {
-            ContentView()
+        Settings {
+            EmptyView()
         }
+    }
+}
+
+class AppDelegate: NSObject, NSApplicationDelegate {
+    var statusItem: NSStatusItem?
+    var popover: NSPopover?
+    var timer: Timer?
+
+    func applicationDidFinishLaunching(_ aNotification: Notification) {
+        // Create the status item
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+
+        // Initial setup of the space indicator
+        updateSpaceIndicator()
+
+        // Create the menu
+        populateWorkspacesMenu()
+
+        // Set up a timer to refresh the space indicator
+        timer = Timer.scheduledTimer(timeInterval: 1.0, target: self, selector: #selector(updateSpaceIndicator), userInfo: nil, repeats: true)
+    }
+
+    func populateWorkspacesMenu() {
+        let menu = NSMenu()
+        menu.addItem(NSMenuItem(title: "Save Current Workspace...", action: #selector(saveWorkspace), keyEquivalent: ""))
+        menu.addItem(NSMenuItem.separator())
+
+        let workspaces = loadWorkspaces()
+        for workspace in workspaces {
+            let submenu = NSMenu()
+            // Load option
+            let loadItem = NSMenuItem(title: "Load Workspace", action: #selector(loadWorkspaceFromMenu(_:)), keyEquivalent: "")
+            loadItem.representedObject = workspace
+            submenu.addItem(loadItem)
+            // Delete option
+            let deleteItem = NSMenuItem(title: "Delete", action: #selector(deleteWorkspaceFromMenu(_:)), keyEquivalent: "")
+            deleteItem.representedObject = workspace
+            submenu.addItem(deleteItem)
+            // Main menu item
+            let item = NSMenuItem(title: workspace.name, action: nil, keyEquivalent: "")
+            menu.setSubmenu(submenu, for: item)
+            menu.addItem(item)
+        }
+
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+
+        statusItem?.menu = menu
+    }
+    
+    func showErrorAlert(message: String) {
+        let alert = NSAlert()
+        alert.messageText = "NiceUtil Error"
+        alert.informativeText = message
+        alert.alertStyle = .warning
+        alert.runModal()
+    }
+
+    @objc func updateSpaceIndicator() {
+        let conn = _CGSDefaultConnection()
+        let displays = CGSCopyManagedDisplaySpaces(conn) as! [NSDictionary]
+        var activeSpaceID = -1
+        var totalSpaces = 0
+        var activeSpaceNumber = -1
+
+        for d in displays {
+            guard let currentSpaces = d["Current Space"] as? [String: Any],
+                  let spaces = d["Spaces"] as? [[String: Any]]
+            else {
+                continue
+            }
+
+            activeSpaceID = currentSpaces["ManagedSpaceID"] as! Int
+            totalSpaces = spaces.count
+            
+            for (index, s) in spaces.enumerated() {
+                if (s["ManagedSpaceID"] as! Int) == activeSpaceID {
+                    activeSpaceNumber = index + 1
+                    break
+                }
+            }
+        }
+        
+        if let button = statusItem?.button {
+            // Clear existing content
+            button.title = ""
+            button.image = nil
+            button.subviews.forEach { $0.removeFromSuperview() }
+            
+            // Create and configure the indicator view
+            if totalSpaces > 0 && activeSpaceNumber > 0 {
+                let view = SpaceIndicatorView(activeSpace: activeSpaceNumber, totalSpaces: totalSpaces)
+                let hostingView = NSHostingView(rootView: view)
+                
+                // Calculate width based on content
+                let digitWidth: CGFloat = 12  // Width per digit
+                let spacing: CGFloat = 6      // Spacing between digits
+                let horizontalPadding: CGFloat = 8  // Total horizontal padding
+                let width = CGFloat(totalSpaces) * digitWidth +
+                          CGFloat(totalSpaces - 1) * spacing +
+                          horizontalPadding
+                
+                // Use button height for consistent vertical sizing
+                let height: CGFloat = 22
+                
+                // Center the view in the button
+                hostingView.frame = NSRect(x: 0, y: 0, width: width, height: height)
+                
+                // Ensure the button is big enough
+                button.frame.size.width = width
+                
+                button.addSubview(hostingView)
+            } else {
+                // Fallback: show a default icon
+                let imageView = NSImageView()
+                imageView.image = NSImage(named: NSImage.applicationIconName)
+                imageView.frame = NSRect(x: 0, y: 0, width: 22, height: 22)
+                imageView.imageScaling = .scaleProportionallyDown
+                button.addSubview(imageView)
+            }
+        }
+    }
+
+    @objc func loadWorkspaceFromMenu(_ sender: NSMenuItem) {
+        guard let workspace = sender.representedObject as? Workspace else { return }
+        launchWorkspaceWithTracking(workspace)
+    }
+
+    @objc func deleteWorkspaceFromMenu(_ sender: NSMenuItem) {
+        guard let workspace = sender.representedObject as? Workspace else { return }
+        var workspaces = loadWorkspaces()
+        workspaces.removeAll { $0.id == workspace.id }
+        do {
+            let url = getWorkspacesURL()
+            let data = try JSONEncoder().encode(workspaces)
+            try data.write(to: url)
+            populateWorkspacesMenu()
+        } catch {
+            showErrorAlert(message: "Error deleting workspace: \(error.localizedDescription)")
+        }
+    }
+
+    func getAppsForCurrentSpace() -> [URL] {
+        print("DEBUG: Getting apps for current space...")
+        
+        // Get all running applications that have visible windows
+        let runningApps = NSWorkspace.shared.runningApplications.filter { app in
+            guard let bundleId = app.bundleIdentifier else { return false }
+            return app.activationPolicy == .regular &&
+                   app.isFinishedLaunching &&
+                   app.bundleURL != nil &&
+                   !bundleId.contains("com.apple.finder") &&
+                   !bundleId.contains("NiceUtil")
+        }
+        
+        var appsOnCurrentSpace: [URL] = []
+        
+        // Get window list for all on-screen windows
+        let windowList = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as! [[String: Any]]
+        
+        for app in runningApps {
+            guard let bundleURL = app.bundleURL else { continue }
+            let pid = app.processIdentifier
+            
+            // Check if this app has any visible windows
+            let hasVisibleWindows = windowList.contains { window in
+                guard let ownerPID = window[kCGWindowOwnerPID as String] as? pid_t,
+                      let windowLayer = window[kCGWindowLayer as String] as? Int,
+                      let bounds = window[kCGWindowBounds as String] as? [String: Any],
+                      let width = bounds["Width"] as? CGFloat,
+                      let height = bounds["Height"] as? CGFloat else {
+                    return false
+                }
+                
+                // Filter for windows that belong to this app, are on the main window layer,
+                // and have reasonable dimensions (not tiny system windows)
+                return ownerPID == pid &&
+                       windowLayer == 0 &&
+                       width > 50 &&
+                       height > 50
+            }
+            
+            if hasVisibleWindows {
+                print("DEBUG: Found app with visible windows: \(bundleURL.lastPathComponent)")
+                appsOnCurrentSpace.append(bundleURL)
+            }
+        }
+        
+        print("DEBUG: Found \(appsOnCurrentSpace.count) apps with visible windows on current space")
+        
+        // If we still don't find any apps, fall back to asking user
+        if appsOnCurrentSpace.isEmpty {
+            let allRegularApps = runningApps.compactMap { $0.bundleURL }
+            if !allRegularApps.isEmpty {
+                DispatchQueue.main.async {
+                    let alert = NSAlert()
+                    alert.messageText = "No windows detected on this space."
+                    alert.informativeText = "Would you like to save all currently running apps as this workspace instead?"
+                    alert.alertStyle = .warning
+                    alert.addButton(withTitle: "Yes")
+                    alert.addButton(withTitle: "No")
+                    let response = alert.runModal()
+                    if response == .alertFirstButtonReturn {
+                        self.save(workspaceName: self.pendingWorkspaceName ?? "Workspace", appURLs: allRegularApps)
+                        self.pendingWorkspaceName = nil
+                    }
+                }
+            }
+            return []
+        }
+        
+        return appsOnCurrentSpace
+    }
+
+    // Store the pending workspace name for fallback
+    var pendingWorkspaceName: String? = nil
+
+    func save(workspaceName: String, appURLs: [URL]) {
+        print("DEBUG: Saving workspace '\(workspaceName)'")
+        guard let currentSpace = getCurrentSpaceNumber() else {
+            print("DEBUG: Failed to get current space number")
+            return
+        }
+        print("DEBUG: Current space number: \(currentSpace)")
+        
+        // Create workspace apps with the current space number
+        let apps = appURLs.map { url in
+            print("DEBUG: Adding app to workspace: \(url.lastPathComponent)")
+            return WorkspaceApp(appPath: url.absoluteString, spaceNumber: currentSpace)
+        }
+        
+        let newWorkspace = Workspace(name: workspaceName, apps: apps)
+        var workspaces = loadWorkspaces()
+        workspaces.append(newWorkspace)
+        
+        do {
+            let url = getWorkspacesURL()
+            let data = try JSONEncoder().encode(workspaces)
+            try data.write(to: url)
+            print("DEBUG: Successfully saved workspace with \(apps.count) apps")
+            populateWorkspacesMenu()
+        } catch {
+            print("DEBUG: Error saving workspace: \(error)")
+            showErrorAlert(message: "Error saving workspaces: \(error.localizedDescription)")
+        }
+    }
+
+    func getCurrentSpaceNumber() -> Int? {
+        print("DEBUG: Getting current space number...")
+        let conn = _CGSDefaultConnection()
+        let displays = CGSCopyManagedDisplaySpaces(conn) as! [NSDictionary]
+        
+        for d in displays {
+            guard let currentSpaces = d["Current Space"] as? [String: Any],
+                  let spaces = d["Spaces"] as? [[String: Any]]
+            else { continue }
+            
+            let activeSpaceID = currentSpaces["ManagedSpaceID"] as! Int
+            print("DEBUG: Active space ID: \(activeSpaceID)")
+            
+            // Find the index of the current space
+            for (index, space) in spaces.enumerated() {
+                if (space["ManagedSpaceID"] as! Int) == activeSpaceID {
+                    let spaceNumber = index + 1
+                    print("DEBUG: Mapped to space number: \(spaceNumber)")
+                    return spaceNumber
+                }
+            }
+        }
+        return nil
+    }
+
+    func launchWorkspaceWithTracking(_ workspace: Workspace) {
+        print("DEBUG: Launching workspace '\(workspace.name)'")
+        var failedApps: [String] = []
+        
+        // Launch ALL apps in the workspace, regardless of current space
+        let appsToLaunch = workspace.apps
+        print("DEBUG: Found \(appsToLaunch.count) apps to launch")
+        
+        // First launch all apps without activation
+        for app in appsToLaunch {
+            print("DEBUG: Attempting to launch: \(app.appPath) (originally from space \(app.spaceNumber))")
+            guard let url = URL(string: app.appPath) else {
+                print("DEBUG: Invalid URL: \(app.appPath)")
+                failedApps.append(app.appPath)
+                continue
+            }
+            
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.activates = false
+            
+            NSWorkspace.shared.openApplication(at: url,
+                                             configuration: configuration) { running, error in
+                if let error = error {
+                    print("DEBUG: Failed to launch \(url.lastPathComponent): \(error)")
+                    failedApps.append(url.lastPathComponent)
+                } else {
+                    print("DEBUG: Successfully launched \(url.lastPathComponent)")
+                }
+            }
+        }
+        
+        // Then activate them after a delay
+        if !appsToLaunch.isEmpty {
+            print("DEBUG: Scheduling activation after delay...")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                for app in appsToLaunch {
+                    guard let url = URL(string: app.appPath),
+                          let runningApp = NSWorkspace.shared.runningApplications.first(where: { $0.bundleURL == url })
+                    else {
+                        print("DEBUG: Could not find running app for \(app.appPath)")
+                        continue
+                    }
+                    
+                    print("DEBUG: Activating \(url.lastPathComponent)")
+                    if #available(macOS 14.0, *) {
+                        runningApp.activate()
+                    } else {
+                        runningApp.activate(options: [.activateIgnoringOtherApps])
+                    }
+                }
+            }
+        } else {
+            print("DEBUG: No apps to launch")
+        }
+        
+        if !failedApps.isEmpty {
+            print("DEBUG: Some apps failed to launch: \(failedApps)")
+            showErrorAlert(message: "Failed to launch: \(failedApps.joined(separator: ", "))")
+        }
+    }
+
+    @objc func saveWorkspace() {
+        let saveView = SaveWorkspaceView(isPresented: .constant(true), onSave: { name in
+            self.pendingWorkspaceName = name
+            let visibleApps = self.getAppsForCurrentSpace()
+            if !visibleApps.isEmpty {
+                self.save(workspaceName: name, appURLs: visibleApps)
+                self.pendingWorkspaceName = nil
+            }
+            self.popover?.performClose(nil)
+        })
+
+        let popover = NSPopover()
+        popover.contentViewController = NSHostingController(rootView: saveView)
+        popover.behavior = .transient
+        popover.show(relativeTo: self.statusItem!.button!.bounds, of: self.statusItem!.button!, preferredEdge: .minY)
+        self.popover = popover
+    }
+
+    func loadWorkspaces() -> [Workspace] {
+        do {
+            let url = getWorkspacesURL()
+            let data = try Data(contentsOf: url)
+            let workspaces = try JSONDecoder().decode([Workspace].self, from: data)
+            return workspaces
+        } catch {
+            // If the file doesn't exist or is corrupted, return an empty array
+            return []
+        }
+    }
+
+    func getWorkspacesURL() -> URL {
+        let fileManager = FileManager.default
+        let appSupportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let appDirectoryURL = appSupportURL.appendingPathComponent("NiceUtil")
+
+        // Create the directory if it doesn't exist
+        if !fileManager.fileExists(atPath: appDirectoryURL.path) {
+            try? fileManager.createDirectory(at: appDirectoryURL, withIntermediateDirectories: true, attributes: nil)
+        }
+
+        return appDirectoryURL.appendingPathComponent("workspaces.json")
+    }
+
+    func getRunningApplications() -> [URL] {
+        let runningApps = NSWorkspace.shared.runningApplications
+        
+        // Filter for regular apps that the user can see and interact with
+        let regularApps = runningApps.filter { $0.activationPolicy == .regular && $0.bundleURL != nil }
+        
+        return regularApps.compactMap { $0.bundleURL }
     }
 }

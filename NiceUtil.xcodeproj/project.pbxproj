@@ -404,10 +404,15 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					CoreGraphics,
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = AinuRakk.NiceUtil;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "NiceUtil/NiceUtil-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
@@ -429,10 +434,15 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					CoreGraphics,
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = AinuRakk.NiceUtil;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "NiceUtil/NiceUtil-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 			};
 			name = Release;

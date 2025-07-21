@@ -342,7 +342,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    @objc func saveWorkspace() {
+    @objc func saveWorkspace() { 
         let saveView = SaveWorkspaceView(isPresented: .constant(true), onSave: { name in
             self.pendingWorkspaceName = name
             let visibleApps = self.getAppsForCurrentSpace()
@@ -350,6 +350,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self.save(workspaceName: name, appURLs: visibleApps)
                 self.pendingWorkspaceName = nil
             }
+            self.popover?.performClose(nil)
+        }, onCancel: {
             self.popover?.performClose(nil)
         })
 

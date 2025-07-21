@@ -3,6 +3,7 @@ import SwiftUI
 struct SaveWorkspaceView: View {
     @Binding var isPresented: Bool
     var onSave: (String) -> Void
+    var onCancel: (() -> Void)? = nil
     @State private var workspaceName = ""
 
     var body: some View {
@@ -14,6 +15,7 @@ struct SaveWorkspaceView: View {
             HStack {
                 Button("Cancel") {
                     isPresented = false
+                    onCancel?()
                 }
                 Button("Save") {
                     onSave(workspaceName)

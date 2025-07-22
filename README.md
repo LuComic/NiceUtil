@@ -20,6 +20,10 @@ NiceUtil combines the visual aspect of applications like Spaceman, Waybar etc, t
    
 ![Screenshot 3](https://github.com/user-attachments/assets/749f683c-9b9f-4804-b53a-507da252c5ac)
 
+## Would like help on
+
+Right now it doesnt detect seperate windows, eg you have a safari window on desktop1 and create a new one with cmd + n and drag it to desktop2 then when saving the Workspace on desktop2 it won't detect the safari window, since it originates from dekstop1.
+
 ## Acknowledgements
 
 This project includes code and logic adapted from [Spaceman](https://github.com/Jaysce/Spaceman), an open-sourcean application for macOS that allows you to view your Spaces / Virtual Desktops in the menu bar.

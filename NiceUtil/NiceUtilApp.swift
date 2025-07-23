@@ -1,5 +1,6 @@
 import SwiftUI
 import Cocoa
+import KeyboardShortcuts
 
 @main
 struct NiceUtilApp: App {
@@ -29,8 +30,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Set up a timer to refresh the space indicator
         timer = Timer.scheduledTimer(timeInterval: 1.0, target: self, selector: #selector(updateSpaceIndicator), userInfo: nil, repeats: true)
+
+        // Add shortcut listeners
+        let workspaces = loadWorkspaces()
+        for workspace in workspaces {
+            let shortcutName = KeyboardShortcuts.Name("workspace_\(workspace.id.uuidString)")
+            KeyboardShortcuts.onKeyDown(for: shortcutName) { [weak self] in
+                self?.launchWorkspaceWithTracking(workspace)
+            }
+        }
     }
 
+    @MainActor
     func populateWorkspacesMenu() {
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: "Save Current Workspace...", action: #selector(saveWorkspace), keyEquivalent: ""))
@@ -43,12 +54,42 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let loadItem = NSMenuItem(title: "Load Workspace", action: #selector(loadWorkspaceFromMenu(_:)), keyEquivalent: "")
             loadItem.representedObject = workspace
             submenu.addItem(loadItem)
+
+            // Shortcut options
+            let shortcutName = KeyboardShortcuts.Name("workspace_\(workspace.id.uuidString)")
+            if KeyboardShortcuts.getShortcut(for: shortcutName) != nil {
+                let editItem = NSMenuItem(title: "Edit Shortcut", action: #selector(editShortcut(_:)), keyEquivalent: "")
+                editItem.representedObject = workspace
+                submenu.addItem(editItem)
+                
+                let removeItem = NSMenuItem(title: "Remove Shortcut", action: #selector(removeShortcut(_:)), keyEquivalent: "")
+                removeItem.representedObject = workspace
+                submenu.addItem(removeItem)
+            } else {
+                let addItem = NSMenuItem(title: "Add Shortcut", action: #selector(addShortcut(_:)), keyEquivalent: "")
+                addItem.representedObject = workspace
+                submenu.addItem(addItem)
+            }
+
             // Delete option
             let deleteItem = NSMenuItem(title: "Delete", action: #selector(deleteWorkspaceFromMenu(_:)), keyEquivalent: "")
             deleteItem.representedObject = workspace
             submenu.addItem(deleteItem)
+
             // Main menu item
-            let item = NSMenuItem(title: workspace.name, action: nil, keyEquivalent: "")
+            let item = NSMenuItem(title: "", action: #selector(loadWorkspaceFromMenu(_:)), keyEquivalent: "")
+            let title = NSMutableAttributedString(string: workspace.name)
+            if let shortcut = KeyboardShortcuts.getShortcut(for: shortcutName) {
+                let shortcutString = "    " + shortcut.description // Add some spacing
+                let attributes: [NSAttributedString.Key: Any] = [
+                    .foregroundColor: NSColor.gray,
+                    .font: NSFont.menuFont(ofSize: NSFont.smallSystemFontSize)
+                ]
+                let attributedShortcut = NSAttributedString(string: shortcutString, attributes: attributes)
+                title.append(attributedShortcut)
+            }
+            item.attributedTitle = title
+            item.representedObject = workspace
             menu.setSubmenu(submenu, for: item)
             menu.addItem(item)
         }
@@ -145,7 +186,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let url = getWorkspacesURL()
             let data = try JSONEncoder().encode(workspaces)
             try data.write(to: url)
-            populateWorkspacesMenu()
+            DispatchQueue.main.async {
+                self.populateWorkspacesMenu()
+            }
         } catch {
             showErrorAlert(message: "Error deleting workspace: \(error.localizedDescription)")
         }
@@ -249,7 +292,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let data = try JSONEncoder().encode(workspaces)
             try data.write(to: url)
             print("DEBUG: Successfully saved workspace with \(apps.count) apps")
-            populateWorkspacesMenu()
+            DispatchQueue.main.async {
+                self.populateWorkspacesMenu()
+            }
         } catch {
             print("DEBUG: Error saving workspace: \(error)")
             showErrorAlert(message: "Error saving workspaces: \(error.localizedDescription)")
@@ -340,6 +385,46 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             print("DEBUG: Some apps failed to launch: \(failedApps)")
             showErrorAlert(message: "Failed to launch: \(failedApps.joined(separator: ", "))")
         }
+    }
+
+    @objc func addShortcut(_ sender: NSMenuItem) {
+        guard let workspace = sender.representedObject as? Workspace else { return }
+        presentShortcutRecorder(for: workspace)
+    }
+
+    @objc func editShortcut(_ sender: NSMenuItem) {
+        guard let workspace = sender.representedObject as? Workspace else { return }
+        presentShortcutRecorder(for: workspace)
+    }
+
+    @objc func removeShortcut(_ sender: NSMenuItem) {
+        guard let workspace = sender.representedObject as? Workspace else { return }
+        let shortcutName = KeyboardShortcuts.Name("workspace_\(workspace.id.uuidString)")
+        KeyboardShortcuts.reset(shortcutName)
+        DispatchQueue.main.async {
+            self.populateWorkspacesMenu()
+        }
+    }
+
+    func presentShortcutRecorder(for workspace: Workspace) {
+        let shortcutView = ShortcutRecorderView(
+            workspace: workspace,
+            onSave: { [weak self] in
+                DispatchQueue.main.async {
+                    self?.populateWorkspacesMenu()
+                    self?.popover?.performClose(nil)
+                }
+            },
+            onCancel: { [weak self] in
+                self?.popover?.performClose(nil)
+            }
+        )
+
+        let popover = NSPopover()
+        popover.contentViewController = NSHostingController(rootView: shortcutView)
+        popover.behavior = .transient
+        popover.show(relativeTo: self.statusItem!.button!.bounds, of: self.statusItem!.button!, preferredEdge: .minY)
+        self.popover = popover
     }
 
     @objc func saveWorkspace() { 

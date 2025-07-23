@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		FC8841742E3160E4002BB998 /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = FC8841732E3160E4002BB998 /* KeyboardShortcuts */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		FC9C6D032E2E5B52007BC1BF /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +56,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FC8841742E3160E4002BB998 /* KeyboardShortcuts in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -112,6 +117,7 @@
 			);
 			name = NiceUtil;
 			packageProductDependencies = (
+				FC8841732E3160E4002BB998 /* KeyboardShortcuts */,
 			);
 			productName = NiceUtil;
 			productReference = FC9C6CF42E2E5B50007BC1BF /* NiceUtil.app */;
@@ -195,6 +201,9 @@
 			);
 			mainGroup = FC9C6CEB2E2E5B50007BC1BF;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				FC8841722E3160E4002BB998 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = FC9C6CF52E2E5B50007BC1BF /* Products */;
 			projectDirPath = "";
@@ -551,6 +560,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		FC8841722E3160E4002BB998 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sindresorhus/KeyboardShortcuts";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.3.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		FC8841732E3160E4002BB998 /* KeyboardShortcuts */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FC8841722E3160E4002BB998 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */;
+			productName = KeyboardShortcuts;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = FC9C6CEC2E2E5B50007BC1BF /* Project object */;
 }

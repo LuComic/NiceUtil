@@ -1,4 +1,5 @@
 import SwiftUI
+import KeyboardShortcuts
 
 struct SaveWorkspaceView: View {
     @Binding var isPresented: Bool

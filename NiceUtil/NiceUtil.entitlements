@@ -10,5 +10,9 @@
 	<true/>
 	<key>com.apple.security.files.application-data</key>
 	<true/>
+	<key>com.apple.security.temporary-exception.apple-events</key>
+	<array>
+		<string>com.apple.systemevents</string>
+	</array>
 </dict>
 </plist>

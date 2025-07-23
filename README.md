@@ -26,4 +26,4 @@ Right now it doesnt detect seperate windows, eg you have a safari window on desk
 
 ## Acknowledgements
 
-This project includes code and logic adapted from [Spaceman](https://github.com/Jaysce/Spaceman), an open-sourcean application for macOS that allows you to view your Spaces / Virtual Desktops in the menu bar.
+- This project includes code and logic adapted from [Spaceman](https://github.com/Jaysce/Spaceman), an open-sourcean application for macOS that allows you to view your Spaces / Virtual Desktops in the menu bar.

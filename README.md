@@ -28,5 +28,5 @@ Right now it doesnt detect seperate windows, eg you have a safari window on desk
 
 This project uses open source software under the MIT License:
 
-- [Spaceman](https://github.com/Jaysce/Spaceman), an open-sourcean application for macOS that allows you to view your Spaces / Virtual Desktops in the menu bar.
+- [Sasindu Jayasinghe - Spaceman](https://github.com/Jaysce/Spaceman), an open-sourcean application for macOS that allows you to view your Spaces / Virtual Desktops in the menu bar.
 - [Sindre Sorhus - KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts?tab=readme-ov-file), Custom global keyboard shortcuts for your macOS app

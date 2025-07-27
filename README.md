@@ -28,5 +28,5 @@ NiceUtil combines the visual aspect of applications like Spaceman, Waybar etc, t
 >
 > This project uses open source software under the MIT License:
 >
-> - [Sasindu Jayasinghe - Spaceman](https://github.com/Jaysce/Spaceman), an open-sourcean application for macOS that allows you to view your Spaces / Virtual Desktops in the menu bar.
-> - [Sindre Sorhus - KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts?tab=readme-ov-file), Custom global keyboard shortcuts for your macOS app
+> - Logic for the indicator - [Sasindu Jayasinghe - Spaceman](https://github.com/Jaysce/Spaceman), an open-sourcean application for macOS that allows you to view your Spaces / Virtual Desktops in the menu bar.
+> - Package for the shortcuts [Sindre Sorhus - KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts?tab=readme-ov-file), Custom global keyboard shortcuts for your macOS app

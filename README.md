@@ -8,7 +8,7 @@ NiceUtil combines the visual aspect of applications like Spaceman, Waybar etc, t
 
 1. Have a mac
 2. Disable space switching to open occurrence of an application:
-![Screenshot 4](https://github.com/user-attachments/assets/6293d143-b9e8-4392-bde3-2d935f626eea")
+![Screenshot 4](https://github.com/user-attachments/assets/6293d143-b9e8-4392-bde3-2d935f626eea)
 
 3. Clone the repo to your computer and use Xcode to build it into an Application.
 4. Run the application and go to a clean desktop or stay on the current one.

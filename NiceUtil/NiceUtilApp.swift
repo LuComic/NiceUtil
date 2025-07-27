@@ -89,6 +89,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         menu.addItem(NSMenuItem.separator())
+
+        // Add "Open New Windows" toggle
+        let openNewWindowsMenuItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        let toggleView = MenuToggleView(frame: NSRect(x: 0, y: 0, width: 250, height: 28)) // Increased height for better spacing
+        openNewWindowsMenuItem.view = toggleView
+        menu.addItem(openNewWindowsMenuItem)
+
+        menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
 
         statusItem?.menu = menu
@@ -352,6 +360,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let appsToLaunch = workspace.apps
         print("DEBUG: Found \(appsToLaunch.count) apps to launch")
         
+        let openNewWindows = UserDefaults.standard.bool(forKey: "openNewWindows")
+
         // First launch all apps without activation, ensuring new instances are created
         for app in appsToLaunch {
             print("DEBUG: Attempting to launch: \(app.appPath) (originally from space \(app.spaceNumber))")
@@ -361,10 +371,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 continue
             }
 
-            // This configuration ensures that a new window is opened if the app is already running.
+            let isAppRunning = NSWorkspace.shared.runningApplications.contains(where: { $0.bundleURL == url })
+
+            if !openNewWindows && isAppRunning {
+                print("DEBUG: App \(url.lastPathComponent) is already running and 'Open New Windows' is off. Skipping.")
+                continue
+            }
+
             let configuration = NSWorkspace.OpenConfiguration()
             configuration.activates = false // Launch without activating initially
-            configuration.createsNewApplicationInstance = true // Crucial for new window/instance
+            configuration.createsNewApplicationInstance = openNewWindows // Crucial for new window/instance
 
             NSWorkspace.shared.openApplication(at: url,
                                              configuration: configuration) { running, error in

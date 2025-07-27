@@ -31,14 +31,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Set up a timer to refresh the space indicator
         timer = Timer.scheduledTimer(timeInterval: 1.0, target: self, selector: #selector(updateSpaceIndicator), userInfo: nil, repeats: true)
 
-        // Add shortcut listeners
-        let workspaces = loadWorkspaces()
-        for workspace in workspaces {
-            let shortcutName = KeyboardShortcuts.Name("workspace_\(workspace.id.uuidString)")
-            KeyboardShortcuts.onKeyDown(for: shortcutName) { [weak self] in
-                self?.launchWorkspaceWithTracking(workspace)
-            }
-        }
+        // Setup and refresh shortcut listeners
+        refreshKeyboardShortcuts()
     }
 
     @MainActor
@@ -98,6 +92,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
 
         statusItem?.menu = menu
+    }
+    
+    func refreshKeyboardShortcuts() {
+        // Load workspaces and re-add listeners
+        let workspaces = loadWorkspaces()
+        for workspace in workspaces {
+            let shortcutName = KeyboardShortcuts.Name("workspace_\(workspace.id.uuidString)")
+            KeyboardShortcuts.onKeyDown(for: shortcutName) { [weak self] in
+                self?.launchWorkspaceWithTracking(workspace)
+            }
+        }
     }
     
     func showErrorAlert(message: String) {
@@ -333,9 +338,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let appsToLaunch = workspace.apps
         print("DEBUG: Found \(appsToLaunch.count) apps to launch")
         
-        var skippedAppBundleIdentifiers: Set<String> = []
-
-        // First launch all apps without activation
+        // First launch all apps without activation, ensuring new instances are created
         for app in appsToLaunch {
             print("DEBUG: Attempting to launch: \(app.appPath) (originally from space \(app.spaceNumber))")
             guard let url = URL(string: app.appPath) else {
@@ -346,16 +349,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
             // This configuration ensures that a new window is opened if the app is already running.
             let configuration = NSWorkspace.OpenConfiguration()
-            configuration.activates = false
-            
-            // Check if the app is already running
-            if let bundleIdentifier = Bundle(url: url)?.bundleIdentifier,
-               NSWorkspace.shared.runningApplications.contains(where: { $0.bundleIdentifier == bundleIdentifier }) {
-                print("DEBUG: App \(url.lastPathComponent) is already running. Skipping launch.")
-                skippedAppBundleIdentifiers.insert(bundleIdentifier)
-                continue // Skip to the next app in the loop
-            }
-            
+            configuration.activates = false // Launch without activating initially
+            configuration.createsNewApplicationInstance = true // Crucial for new window/instance
+
             NSWorkspace.shared.openApplication(at: url,
                                              configuration: configuration) { running, error in
                 if let error = error {
@@ -376,11 +372,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                           let runningApp = NSWorkspace.shared.runningApplications.first(where: { $0.bundleURL == url })
                     else {
                         print("DEBUG: Could not find running app for \(app.appPath)")
-                        continue
-                    }
-                    
-                    if let bundleIdentifier = runningApp.bundleIdentifier, skippedAppBundleIdentifiers.contains(bundleIdentifier) {
-                        print("DEBUG: App \(url.lastPathComponent) was previously skipped. Not activating.")
                         continue
                     }
                     
@@ -419,6 +410,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         KeyboardShortcuts.reset(shortcutName)
         DispatchQueue.main.async {
             self.populateWorkspacesMenu()
+            self.refreshKeyboardShortcuts()
         }
     }
 
@@ -428,6 +420,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             onSave: { [weak self] in
                 DispatchQueue.main.async {
                     self?.populateWorkspacesMenu()
+                    self?.refreshKeyboardShortcuts()
                     self?.popover?.performClose(nil)
                 }
             },
@@ -460,7 +453,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }, onCancel: {
                     self.popover?.performClose(nil)
                 }, onAddAllRunningApps: {
-                    return self.getAllRunningApplications()
+                    return self.getRunningApplications()
                 })
 
                 let popover = NSPopover()
@@ -497,9 +490,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return appDirectoryURL.appendingPathComponent("workspaces.json")
     }
 
-    
-
-    func getAllRunningApplications() -> [URL] {
+    func getRunningApplications() -> [URL] {
         let runningApps = NSWorkspace.shared.runningApplications
         
         // Filter for regular apps that the user can see and interact with

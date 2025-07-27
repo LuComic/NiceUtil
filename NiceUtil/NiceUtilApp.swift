@@ -31,14 +31,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Set up a timer to refresh the space indicator
         timer = Timer.scheduledTimer(timeInterval: 1.0, target: self, selector: #selector(updateSpaceIndicator), userInfo: nil, repeats: true)
 
-        // Add shortcut listeners
-        let workspaces = loadWorkspaces()
-        for workspace in workspaces {
-            let shortcutName = KeyboardShortcuts.Name("workspace_\(workspace.id.uuidString)")
-            KeyboardShortcuts.onKeyDown(for: shortcutName) { [weak self] in
-                self?.launchWorkspaceWithTracking(workspace)
-            }
-        }
+        // Setup and refresh shortcut listeners
+        refreshKeyboardShortcuts()
     }
 
     @MainActor
@@ -98,6 +92,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
 
         statusItem?.menu = menu
+    }
+    
+    func refreshKeyboardShortcuts() {
+        // Load workspaces and re-add listeners
+        let workspaces = loadWorkspaces()
+        for workspace in workspaces {
+            let shortcutName = KeyboardShortcuts.Name("workspace_\(workspace.id.uuidString)")
+            KeyboardShortcuts.onKeyDown(for: shortcutName) { [weak self] in
+                self?.launchWorkspaceWithTracking(workspace)
+            }
+        }
     }
     
     func showErrorAlert(message: String) {
@@ -332,7 +337,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let appsToLaunch = workspace.apps
         print("DEBUG: Found \(appsToLaunch.count) apps to launch")
-
+        
+        // First launch all apps without activation, ensuring new instances are created
         for app in appsToLaunch {
             print("DEBUG: Attempting to launch: \(app.appPath) (originally from space \(app.spaceNumber))")
             guard let url = URL(string: app.appPath) else {
@@ -343,19 +349,44 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
             // This configuration ensures that a new window is opened if the app is already running.
             let configuration = NSWorkspace.OpenConfiguration()
-            configuration.activates = true
-            configuration.createsNewApplicationInstance = true
+            configuration.activates = false // Launch without activating initially
+            configuration.createsNewApplicationInstance = true // Crucial for new window/instance
 
-            NSWorkspace.shared.open(url, configuration: configuration) { runningApp, error in
+            NSWorkspace.shared.openApplication(at: url,
+                                             configuration: configuration) { running, error in
                 if let error = error {
-                    print("DEBUG: Failed to process \(url.lastPathComponent): \(error)")
+                    print("DEBUG: Failed to launch \(url.lastPathComponent): \(error.localizedDescription)")
                     failedApps.append(url.lastPathComponent)
                 } else {
                     print("DEBUG: Successfully processed \(url.lastPathComponent)")
                 }
             }
         }
-
+        
+        // Then activate them after a delay
+        if !appsToLaunch.isEmpty {
+            print("DEBUG: Scheduling activation after delay...")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                for app in appsToLaunch {
+                    guard let url = URL(string: app.appPath),
+                          let runningApp = NSWorkspace.shared.runningApplications.first(where: { $0.bundleURL == url })
+                    else {
+                        print("DEBUG: Could not find running app for \(app.appPath)")
+                        continue
+                    }
+                    
+                    print("DEBUG: Activating \(url.lastPathComponent)")
+                    if #available(macOS 14.0, *) {
+                        runningApp.activate()
+                    } else {
+                        runningApp.activate(options: [.activateIgnoringOtherApps])
+                    }
+                }
+            }
+        } else {
+            print("DEBUG: No apps to launch")
+        }
+        
         if !failedApps.isEmpty {
             DispatchQueue.main.async {
                 self.showErrorAlert(message: "Failed to launch: \(failedApps.joined(separator: ", "))")
@@ -379,6 +410,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         KeyboardShortcuts.reset(shortcutName)
         DispatchQueue.main.async {
             self.populateWorkspacesMenu()
+            self.refreshKeyboardShortcuts()
         }
     }
 
@@ -388,6 +420,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             onSave: { [weak self] in
                 DispatchQueue.main.async {
                     self?.populateWorkspacesMenu()
+                    self?.refreshKeyboardShortcuts()
                     self?.popover?.performClose(nil)
                 }
             },
@@ -403,24 +436,33 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         self.popover = popover
     }
 
-    @objc func saveWorkspace() { 
-        let saveView = SaveWorkspaceView(isPresented: .constant(true), onSave: { name in
-            self.pendingWorkspaceName = name
-            let visibleApps = self.getAppsForCurrentSpace()
-            if !visibleApps.isEmpty {
-                self.save(workspaceName: name, appURLs: visibleApps)
+    @objc func saveWorkspace() {
+        let visibleApps = self.getAppsForCurrentSpace()
+        
+        // Perform the potentially long-running task on a background thread
+        DispatchQueue.global(qos: .userInitiated).async {
+            // Dispatch back to the main thread to update the UI
+            DispatchQueue.main.async {
+                let saveView = SaveWorkspaceView(isPresented: .constant(true), preSelectedApps: visibleApps, onSave: { name, selectedApps in
+                    self.pendingWorkspaceName = name
+                    if !selectedApps.isEmpty {
+                self.save(workspaceName: name, appURLs: selectedApps)
                 self.pendingWorkspaceName = nil
             }
             self.popover?.performClose(nil)
         }, onCancel: {
-            self.popover?.performClose(nil)
-        })
+                    self.popover?.performClose(nil)
+                }, onAddAllRunningApps: {
+                    return self.getRunningApplications()
+                })
 
-        let popover = NSPopover()
-        popover.contentViewController = NSHostingController(rootView: saveView)
-        popover.behavior = .transient
-        popover.show(relativeTo: self.statusItem!.button!.bounds, of: self.statusItem!.button!, preferredEdge: .minY)
-        self.popover = popover
+                let popover = NSPopover()
+                popover.contentViewController = NSHostingController(rootView: saveView)
+                popover.behavior = .transient
+                popover.show(relativeTo: self.statusItem!.button!.bounds, of: self.statusItem!.button!, preferredEdge: .minY)
+                self.popover = popover
+            }
+        }
     }
 
     func loadWorkspaces() -> [Workspace] {

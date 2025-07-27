@@ -20,8 +20,8 @@ NiceUtil combines the visual aspect of applications like Spaceman, Waybar etc, t
    
 ![Screenshot 3](https://github.com/user-attachments/assets/749f683c-9b9f-4804-b53a-507da252c5ac)
 
+## Acknowledgements
 > [!IMPORTANT]
-> ## Acknowledgements
 >
 > This project uses open source software under the MIT License:
 >

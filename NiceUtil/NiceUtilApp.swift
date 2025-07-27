@@ -199,7 +199,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    func getAppsForCurrentSpace() -> [URL] {
+    func getAppsForCurrentSpace() -> [URL]? { // Changed return type to optional
         print("DEBUG: Getting apps for current space...")
         
         // Get all running applications that have visible windows
@@ -251,21 +251,35 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if appsOnCurrentSpace.isEmpty {
             let allRegularApps = runningApps.compactMap { $0.bundleURL }
             if !allRegularApps.isEmpty {
-                DispatchQueue.main.async {
+                var response: NSApplication.ModalResponse = .alertSecondButtonReturn // Default to No
+                DispatchQueue.main.sync {
                     let alert = NSAlert()
                     alert.messageText = "No windows detected on this space."
                     alert.informativeText = "Would you like to save all currently running apps as this workspace instead?"
                     alert.alertStyle = .warning
                     alert.addButton(withTitle: "Yes")
                     alert.addButton(withTitle: "No")
-                    let response = alert.runModal()
-                    if response == .alertFirstButtonReturn {
-                        self.save(workspaceName: self.pendingWorkspaceName ?? "Workspace", appURLs: allRegularApps)
-                        self.pendingWorkspaceName = nil
-                    }
+                    response = alert.runModal()
                 }
+                
+                if response == .alertFirstButtonReturn {
+                    // User clicked "Yes"
+                    return allRegularApps
+                } else {
+                    // User clicked "No"
+                    DispatchQueue.main.async {
+                        self.popover?.performClose(nil) // Close the menu
+                    }
+                    return nil // Indicate that no apps should be saved
+                }
+            } else {
+                // No regular apps running either
+                DispatchQueue.main.async {
+                    self.showErrorAlert(message: "No running applications found to save.")
+                    self.popover?.performClose(nil) // Close the menu if there's nothing to save
+                }
+                return nil
             }
-            return []
         }
         
         return appsOnCurrentSpace
@@ -437,20 +451,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func saveWorkspace() {
-        let visibleApps = self.getAppsForCurrentSpace()
-        
         // Perform the potentially long-running task on a background thread
         DispatchQueue.global(qos: .userInitiated).async {
+            let visibleApps = self.getAppsForCurrentSpace()
+            
             // Dispatch back to the main thread to update the UI
             DispatchQueue.main.async {
-                let saveView = SaveWorkspaceView(isPresented: .constant(true), preSelectedApps: visibleApps, onSave: { name, selectedApps in
+                guard let appsToSave = visibleApps else {
+                    // If visibleApps is nil, it means the user cancelled or no apps were found.
+                    // The popover should already be closed by getAppsForCurrentSpace.
+                    return
+                }
+                
+                let saveView = SaveWorkspaceView(isPresented: .constant(true), preSelectedApps: appsToSave, onSave: { name, selectedApps in
                     self.pendingWorkspaceName = name
                     if !selectedApps.isEmpty {
-                self.save(workspaceName: name, appURLs: selectedApps)
-                self.pendingWorkspaceName = nil
-            }
-            self.popover?.performClose(nil)
-        }, onCancel: {
+                        self.save(workspaceName: name, appURLs: selectedApps)
+                        self.pendingWorkspaceName = nil
+                    }
+                    self.popover?.performClose(nil)
+                }, onCancel: {
                     self.popover?.performClose(nil)
                 }, onAddAllRunningApps: {
                     return self.getRunningApplications()

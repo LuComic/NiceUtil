@@ -329,12 +329,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func launchWorkspaceWithTracking(_ workspace: Workspace) {
         print("DEBUG: Launching workspace '\(workspace.name)'")
         var failedApps: [String] = []
-        
-        // Launch ALL apps in the workspace, regardless of current space
+
         let appsToLaunch = workspace.apps
         print("DEBUG: Found \(appsToLaunch.count) apps to launch")
-        
-        // First launch all apps without activation
+
         for app in appsToLaunch {
             print("DEBUG: Attempting to launch: \(app.appPath) (originally from space \(app.spaceNumber))")
             guard let url = URL(string: app.appPath) else {
@@ -342,48 +340,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 failedApps.append(app.appPath)
                 continue
             }
-            
+
+            // This configuration ensures that a new window is opened if the app is already running.
             let configuration = NSWorkspace.OpenConfiguration()
-            configuration.activates = false
-            
-            NSWorkspace.shared.openApplication(at: url,
-                                             configuration: configuration) { running, error in
+            configuration.activates = true
+            configuration.createsNewApplicationInstance = true
+
+            NSWorkspace.shared.open(url, configuration: configuration) { runningApp, error in
                 if let error = error {
-                    print("DEBUG: Failed to launch \(url.lastPathComponent): \(error)")
+                    print("DEBUG: Failed to process \(url.lastPathComponent): \(error)")
                     failedApps.append(url.lastPathComponent)
                 } else {
-                    print("DEBUG: Successfully launched \(url.lastPathComponent)")
+                    print("DEBUG: Successfully processed \(url.lastPathComponent)")
                 }
             }
         }
-        
-        // Then activate them after a delay
-        if !appsToLaunch.isEmpty {
-            print("DEBUG: Scheduling activation after delay...")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                for app in appsToLaunch {
-                    guard let url = URL(string: app.appPath),
-                          let runningApp = NSWorkspace.shared.runningApplications.first(where: { $0.bundleURL == url })
-                    else {
-                        print("DEBUG: Could not find running app for \(app.appPath)")
-                        continue
-                    }
-                    
-                    print("DEBUG: Activating \(url.lastPathComponent)")
-                    if #available(macOS 14.0, *) {
-                        runningApp.activate()
-                    } else {
-                        runningApp.activate(options: [.activateIgnoringOtherApps])
-                    }
-                }
-            }
-        } else {
-            print("DEBUG: No apps to launch")
-        }
-        
+
         if !failedApps.isEmpty {
-            print("DEBUG: Some apps failed to launch: \(failedApps)")
-            showErrorAlert(message: "Failed to launch: \(failedApps.joined(separator: ", "))")
+            DispatchQueue.main.async {
+                self.showErrorAlert(message: "Failed to launch: \(failedApps.joined(separator: ", "))")
+            }
         }
     }
 

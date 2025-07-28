@@ -53,7 +53,7 @@ class MenuToggleView: NSView {
 
         // Add constraints to the stack view to fill the custom view
         NSLayoutConstraint.activate([
-            stackView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10), // Left align with padding
+            stackView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 15), // Left align with padding
             stackView.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -10),
             stackView.topAnchor.constraint(equalTo: topAnchor, constant: 0),
             stackView.bottomAnchor.constraint(equalTo: bottomAnchor, constant: 0)

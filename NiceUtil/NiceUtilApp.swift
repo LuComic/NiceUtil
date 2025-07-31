@@ -17,10 +17,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem?
     var popover: NSPopover?
     var timer: Timer?
+    var hostingView: NSHostingView<SpaceIndicatorView>?
+    var fallbackImageView: NSImageView?
+
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         // Create the status item
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        if let button = statusItem?.button {
+            let view = SpaceIndicatorView(activeSpace: 1, totalSpaces: 1)
+            hostingView = NSHostingView(rootView: view)
+            hostingView?.frame = NSRect(x: 0, y: 0, width: 22, height: 22)
+            button.addSubview(hostingView!)
+
+            fallbackImageView = NSImageView()
+            fallbackImageView?.image = NSImage(named: NSImage.applicationIconName)
+            fallbackImageView?.frame = NSRect(x: 0, y: 0, width: 22, height: 22)
+            fallbackImageView?.imageScaling = .scaleProportionallyDown
+            button.addSubview(fallbackImageView!)
+        }
 
         // Initial setup of the space indicator
         updateSpaceIndicator()
@@ -147,41 +162,29 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         
         if let button = statusItem?.button {
-            // Clear existing content
             button.title = ""
             button.image = nil
-            button.subviews.forEach { $0.removeFromSuperview() }
-            
-            // Create and configure the indicator view
+
             if totalSpaces > 0 && activeSpaceNumber > 0 {
                 let view = SpaceIndicatorView(activeSpace: activeSpaceNumber, totalSpaces: totalSpaces)
-                let hostingView = NSHostingView(rootView: view)
+                hostingView?.rootView = view
                 
-                // Calculate width based on content
-                let digitWidth: CGFloat = 12  // Width per digit
-                let spacing: CGFloat = 6      // Spacing between digits
-                let horizontalPadding: CGFloat = 8  // Total horizontal padding
+                let digitWidth: CGFloat = 12
+                let spacing: CGFloat = 6
+                let horizontalPadding: CGFloat = 8
                 let width = CGFloat(totalSpaces) * digitWidth +
                           CGFloat(totalSpaces - 1) * spacing +
                           horizontalPadding
                 
-                // Use button height for consistent vertical sizing
                 let height: CGFloat = 22
                 
-                // Center the view in the button
-                hostingView.frame = NSRect(x: 0, y: 0, width: width, height: height)
-                
-                // Ensure the button is big enough
+                hostingView?.frame = NSRect(x: 0, y: 0, width: width, height: height)
                 button.frame.size.width = width
-                
-                button.addSubview(hostingView)
+                hostingView?.isHidden = false
+                fallbackImageView?.isHidden = true
             } else {
-                // Fallback: show a default icon
-                let imageView = NSImageView()
-                imageView.image = NSImage(named: NSImage.applicationIconName)
-                imageView.frame = NSRect(x: 0, y: 0, width: 22, height: 22)
-                imageView.imageScaling = .scaleProportionallyDown
-                button.addSubview(imageView)
+                hostingView?.isHidden = true
+                fallbackImageView?.isHidden = false
             }
         }
     }
